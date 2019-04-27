@@ -7,13 +7,13 @@ import org.springframework.boot.CommandLineRunner
 import org.springframework.stereotype.Service
 
 @Service
-case class TelegrammBotStarter @Autowired()(private val userRepository: UserRepository,
-                                            private val workPeriodRepository: WorkPeriodRepository,
-                                            private val workPeriodsDaysAndTimesRepository: WorkPeriodsDaysAndTimesRepository,
-                                            private val categoryRepository: CategoryRepository)
+class TelegrammBotStarter @Autowired()(userRepository: UserRepository,
+                                       workPeriodRepository: WorkPeriodRepository,
+                                       workPeriodsDaysAndTimesRepository: WorkPeriodsDaysAndTimesRepository,
+                                       categoryRepository: CategoryRepository)
   extends CommandLineRunner {
 
-  override def run(args: String*): Unit = OldIronWorkManBot(userRepository,
+  override def run(args: String*): Unit = new OldIronWorkManBot(userRepository,
                                                             workPeriodRepository,
                                                             workPeriodsDaysAndTimesRepository,
                                                             categoryRepository).run()

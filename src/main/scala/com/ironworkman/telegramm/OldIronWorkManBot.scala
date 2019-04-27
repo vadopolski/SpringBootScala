@@ -17,10 +17,10 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-case class OldIronWorkManBot(val userRepository: UserRepository,
-                             val workPeriodRepository: WorkPeriodRepository,
-                             val workPeriodsDaysAndTimesRepository: WorkPeriodsDaysAndTimesRepository,
-                             val categoryRepository: CategoryRepository)
+class OldIronWorkManBot(userRepository: UserRepository,
+                         workPeriodRepository: WorkPeriodRepository,
+                         workPeriodsDaysAndTimesRepository: WorkPeriodsDaysAndTimesRepository,
+                         categoryRepository: CategoryRepository)
     extends TelegramBot with Polling with Commands {
 
   implicit val timer                                     = IO.timer(ExecutionContext.global)
