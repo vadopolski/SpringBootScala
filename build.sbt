@@ -14,6 +14,7 @@ val lombokVersion       = "1.16.20"
 val liqibaseVersion     = "3.6.3"
 val PgSQLVersion        = "42.2.1"
 val telegrammBotVersion = "2.9.3"
+val monixVersion = "3.0.0-RC2"
 
 libraryDependencies ++= Seq(
   "org.projectlombok"        % "lombok"                       % lombokVersion,
@@ -26,7 +27,8 @@ libraryDependencies ++= Seq(
   "org.springframework.boot" % "spring-boot-starter-test" % springBootVersion,
   "info.mukel"               %% "telegrambot4s"           % telegrammBotVersion,
   "org.typelevel"            %% "cats-core"               % catsVersion,
-  "org.typelevel"            %% "cats-effect"             % catsEffectVersion
+  "org.typelevel"            %% "cats-effect"             % catsEffectVersion,
+  "io.monix"                 %% "monix"                   % monixVersion
 )
 
 enablePlugins(JavaAppPackaging, AshScriptPlugin)
