@@ -1,5 +1,7 @@
 package com.ironworkman.telegramm
 
+import java.util.Optional
+
 import info.mukel.telegrambot4s.models.Message
 
 import scala.language.postfixOps
@@ -28,21 +30,26 @@ class OldIronWorkManBot(userRepository: UserRepository,
                         categoryRepository: CategoryRepository)
     extends TelegramBot with Polling with Commands {
   private val executor: ExecutionContextExecutor = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(10))
-  implicit val timer                          = IO.timer(executor)
-  implicit val contextShift: ContextShift[IO] = IO.contextShift(executor)
+  implicit val timer                             = IO.timer(executor)
+  implicit val contextShift: ContextShift[IO]    = IO.contextShift(executor)
 
   val blockingEC = ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
-  def token                               = "767996938:AAF6talqUn--PI0z2vJeAxcOtvMRWrQkevw"
+  def token                                                = "767996938:AAF6talqUn--PI0z2vJeAxcOtvMRWrQkevw"
   def saveUserIO(userId: Long, userName: String): IO[Unit] = IO(userRepository.save(User(userId, userName)))
-
+  def saveSprintIO(chatId: Long, amount: Long, duration: Long, userId: Long, userName: String): IO[Unit] =
+    IO(
+      workPeriodsDaysAndTimesRepository
+        .save(WorkPeriodsDaysAndTimes(chatId, amount, duration, User(userId, userName))))
+  def findSumTimeByCategoryIO(category: Long): IO[Long] = IO(workPeriodRepository.findSumByCategoryIdAndUser(category))
+  def findSprintByIdIO(chatId: Long): IO[Optional[WorkPeriodsDaysAndTimes]] = IO(workPeriodsDaysAndTimesRepository.findById(chatId))
 
   def greeting(chatId: Long, userId: Long, userName: String): IO[Unit] =
     for {
       _ <- sendMessageMethodIO(s"Hello ${userName}! I`m IronWorkMan bot.", chatId)
       _ <- sendMessageMethodIO(s"Please enter a command with the parameters of the number of " +
-                     s"intervals and the duration of the interval in minutes.",
-                   chatId)
+                                 s"intervals and the duration of the interval in minutes.",
+                               chatId)
       _ <- sendMessageMethodIO(s"For Example /start 5 30", chatId)
       _ <- sendMessageMethodIO(s"A sprint of 5 intervals of 30 minutes will start.", chatId)
       _ <- contextShift.evalOn(blockingEC)(saveUserIO(userId, userName))
@@ -51,9 +58,7 @@ class OldIronWorkManBot(userRepository: UserRepository,
   def startSprint(chatId: Long, userId: Long, userName: String, duration: Long, amount: Long): IO[Unit] =
     for {
       _ <- sendMessageMethodIO(s"A sprint of $amount intervals of $duration minutes started.", chatId)
-      _ <- IO(
-            workPeriodsDaysAndTimesRepository
-              .save(WorkPeriodsDaysAndTimes(chatId, amount, duration, User(userId, userName))))
+      _ <- contextShift.evalOn(blockingEC)(saveSprintIO(chatId, amount, duration, userId, userName))
       _ <- scheduler(0, amount.toLong, duration.toLong, chatId)
     } yield ()
 
@@ -63,11 +68,15 @@ class OldIronWorkManBot(userRepository: UserRepository,
             case 0 =>
               for {
                 _ <- sendMessageMethodIO(s"Your sprint is finished after $count intervals", chatId)
-                _ <- IO(workPeriodRepository.findSumByCategoryIdAndUser2(1))
+                _ <- contextShift
+                      .evalOn(blockingEC)(findSumTimeByCategoryIO(1))
                       .flatMap(paid => sendMessageMethodIO(s"You were paid for $paid minutes", chatId))
-                _ <- IO(workPeriodRepository.findSumByCategoryIdAndUser2(2))
-                      .flatMap(dontStopPaying => sendMessageMethodIO(s"You did not stop paying for $dontStopPaying minutes", chatId))
-                _ <- IO(workPeriodRepository.findSumByCategoryIdAndUser2(3))
+                _ <- contextShift
+                      .evalOn(blockingEC)(findSumTimeByCategoryIO(2))
+                      .flatMap(dontStopPaying =>
+                        sendMessageMethodIO(s"You did not stop paying for $dontStopPaying minutes", chatId))
+                _ <- contextShift
+                      .evalOn(blockingEC)(findSumTimeByCategoryIO(3))
                       .flatMap(dontPay => sendMessageMethodIO(s"You were not paid for $dontPay minutes", chatId))
               } yield ()
             case _ =>
@@ -82,24 +91,22 @@ class OldIronWorkManBot(userRepository: UserRepository,
           }
     } yield ()
 
+  def saveWorkPeriodIO(durationTime: Long, description: String, category: Category, workPeriodsDaysAndTimes: WorkPeriodsDaysAndTimes ): IO[Unit] =
+    IO(workPeriodRepository.save(WorkPeriod(null, durationTime, description, category, workPeriodsDaysAndTimes)))
+  def findCategoryByIdIO(categoryId: Long): IO[Optional[Category]] = IO(categoryRepository.findById(categoryId))
+
   def recordTime(chatId: Long, paidTime: Long, dontStopPayingTime: Long, notPayingTime: Long, description: String): IO[Unit] =
     for {
-      workPeriodsDaysAndTimes <- IO(workPeriodsDaysAndTimesRepository.findById(chatId))
-      paid                    <- IO(categoryRepository.findById(1L))
-      _ <- IO(
-            workPeriodRepository
-              .save(WorkPeriod(null, paidTime, description, paid.get, workPeriodsDaysAndTimes.get)))
-      _              <- sendMessageMethodIO(s"A time is recorded", chatId)
-      dontStopPaying <- IO(categoryRepository.findById(2L))
-      _ <- IO(
-            workPeriodRepository
-              .save(WorkPeriod(null, dontStopPayingTime, description, dontStopPaying.get, workPeriodsDaysAndTimes.get)))
-      _         <- sendMessageMethodIO(s"A time is recorded", chatId)
-      notPaying <- IO(categoryRepository.findById(3L))
-      _ <- IO(
-            workPeriodRepository
-              .save(WorkPeriod(null, notPayingTime, description, notPaying.get, workPeriodsDaysAndTimes.get)))
-      _ <- sendMessageMethodIO(s"A time is recorded", chatId)
+      workPeriodsDaysAndTimes <- contextShift.evalOn(blockingEC)(findSprintByIdIO(chatId))
+      paid                    <- contextShift.evalOn(blockingEC)(findCategoryByIdIO(1))
+      _                       <- contextShift.evalOn(blockingEC)(saveWorkPeriodIO(paidTime, description, paid.get, workPeriodsDaysAndTimes.get))
+      _                       <- sendMessageMethodIO(s"A time is recorded", chatId)
+      dontStopPaying          <- contextShift.evalOn(blockingEC)(findCategoryByIdIO(2))
+      _                       <- contextShift.evalOn(blockingEC)(saveWorkPeriodIO(dontStopPayingTime, description, dontStopPaying.get, workPeriodsDaysAndTimes.get))
+      _                       <- sendMessageMethodIO(s"A time is recorded", chatId)
+      notPaying               <- contextShift.evalOn(blockingEC)(findCategoryByIdIO(3))
+      _                       <- contextShift.evalOn(blockingEC)(saveWorkPeriodIO(notPayingTime, description, notPaying.get, workPeriodsDaysAndTimes.get))
+      _                       <- sendMessageMethodIO(s"A time is recorded", chatId)
     } yield ()
 
   override def onMessage(message: Message) = message.text match {
